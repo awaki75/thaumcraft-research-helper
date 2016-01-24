@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Thaumcraft Research Helper</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap.min.css">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.0.0/lodash.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/neo-async/1.7.2/async.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.4.9/angular.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.4.9/angular-animate.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/angular-ui-bootstrap/1.1.0/ui-bootstrap-tpls.js"></script>
+<script src="scripts.js"></script>
+
+<div ng-app="myApp" ng-controller="MainCtrl">
+  <script type="text/ng-template" id="combinations.html">
+    <div ng-if="combinations[aspect].length > 0">
+      <div class="col-xs-offset-{{ depth }}">
+        <aspect number="aspect"></aspect> = <aspect number="combinations[aspect][0]"></aspect> + <aspect number="combinations[aspect][1]"></aspect>
+      </div>
+      <ng-include src="'combinations.html'" ng-repeat="aspect in combinations[aspect]" ng-init="depth = depth + 1"></ng-include>
+    </div>
+  </script>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Thaumcraft Research Helper</h1>
+    </div>
+    <div class="panel panel-default">
+      <div class="panel-body">
+        <form class="form-inline" name="form">
+          <div class="form-group">
+            <label>from</label>
+            <select class="form-control" ng-model="from" ng-options="name for name in names"></select>
+          </div>
+          <div class="form-group">
+            <label>to</label>
+            <select class="form-control" ng-model="to" ng-options="name for name in names"></select>
+          </div>
+          <div class="form-group">
+            <label>step</label>
+            <input type="number" class="form-control" ng-model="step" min="3" max="20" required>
+          </div>
+          <button class="btn btn-default" ng-disabled="form.$invalid || searching" ng-click="search()" ng-switch="searching">
+            <span ng-switch-when="false">search</span>
+            <span ng-switch-default><span class="glyphicon glyphicon-refresh spin"></span> searching ...</span>
+          </button>
+        </form>
+      </div>
+    </div>
+    <div ng-if="paths.length > 0">
+      <table class="table table-striped table-bordered table-hover table-condensed">
+        <tr>
+          <th colspan="{{ paths[0].path.length }}">Path</th>
+          <th class="text-right">Cost</th>
+        </tr>
+        <tr ng-repeat="path in paths">
+          <td ng-repeat="aspect in path.path track by $index">
+            <div ng-if="combinations[aspect].length === 0"><aspect number="aspect"></aspect></div>
+            <ng-include src="'combinations.html'" ng-init="depth = 0"></ng-include>
+          </td>
+          <td class="text-right">{{ path.cost }}</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
