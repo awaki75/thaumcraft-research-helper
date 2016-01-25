@@ -11,12 +11,12 @@
 <script src="scripts.js"></script>
 
 <div ng-app="myApp" ng-controller="MainCtrl">
-  <script type="text/ng-template" id="combinations.html">
-    <div ng-if="combinations[aspect].length > 0">
+  <script type="text/ng-template" id="from.html">
+    <div ng-if="aspect.from.length > 0">
       <div class="col-xs-offset-{{ depth }}">
-        <aspect number="aspect"></aspect> = <aspect number="combinations[aspect][0]"></aspect> + <aspect number="combinations[aspect][1]"></aspect>
+        <aspect src="aspect"></aspect> = <aspect src="aspect.from[0]"></aspect> + <aspect src="aspect.from[1]"></aspect>
       </div>
-      <ng-include src="'combinations.html'" ng-repeat="aspect in combinations[aspect]" ng-init="depth = depth + 1"></ng-include>
+      <ng-include src="'from.html'" ng-repeat="aspect in aspect.from" ng-init="depth = depth + 1"></ng-include>
     </div>
   </script>
 
@@ -29,11 +29,11 @@
         <form class="form-inline" name="form">
           <div class="form-group">
             <label>from</label>
-            <select class="form-control" ng-model="from" ng-options="name for name in names"></select>
+            <select class="form-control" ng-model="from" ng-options="aspect as aspect.name for aspect in aspects | orderBy:'name'"></select>
           </div>
           <div class="form-group">
             <label>to</label>
-            <select class="form-control" ng-model="to" ng-options="name for name in names"></select>
+            <select class="form-control" ng-model="to" ng-options="aspect as aspect.name for aspect in aspects | orderBy:'name'"></select>
           </div>
           <div class="form-group">
             <label>step</label>
@@ -54,8 +54,8 @@
         </tr>
         <tr ng-repeat="path in paths">
           <td ng-repeat="aspect in path.path track by $index">
-            <div ng-if="combinations[aspect].length === 0"><aspect number="aspect"></aspect></div>
-            <ng-include src="'combinations.html'" ng-init="depth = 0"></ng-include>
+            <div ng-if="aspect.from.length === 0"><aspect src="aspect"></aspect></div>
+            <ng-include src="'from.html'" ng-init="depth = 0"></ng-include>
           </td>
           <td class="text-right">{{ path.cost }}</td>
         </tr>

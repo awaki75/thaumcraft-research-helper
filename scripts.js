@@ -40,89 +40,100 @@ angular.module('myApp', [])
 
   .factory('Aspect', function(COMBINATIONS) {
     var keys = _.keys(COMBINATIONS);
-    var combinations = _.map(keys, function(a1) {
-      return _.map(COMBINATIONS[a1], function(a2) {
-        return _.indexOf(keys, a2);
-      }).sort();
+
+    var aspects = _.mapValues(COMBINATIONS, function() {
+      return {name: null, cost: 0, to: null, from: null};
     });
-    var primals = _.filter(_.range(keys.length), function(a) {
-      return combinations[a].length === 0;
+
+    _.each(aspects, function(aspect, k) {
+      aspect.name = k;
+      aspect.from = _.map(COMBINATIONS[k], _.propertyOf(aspects));
+      aspect.to = _.concat(aspect.from);
     });
-    var hasCompound = function(aspects) {
-      return _.some(aspects, function(a) {
-        return !_.includes(primals, a);
-      });
-    };
-    var costs = _.map(combinations, function(c) {
-      if (c.length === 0) {
-        return 1;
-      }
-      var aspects = _.concat(c);
-      while (hasCompound(aspects)) {
-        aspects = _.transform(aspects, function(arr, a) {
-          if (_.includes(primals, a)) {
-            arr.push(a);
-          } else {
-            _.each(combinations[a], function(a) {
-              arr.push(a);
-            });
-          }
-        });
-      }
-      return aspects.length;
-    });
-    var closes = _.map(combinations, function(c1, a1) {
-      var close = _.concat(c1);
-      _.each(combinations, function(c2, a2) {
-        if (_.includes(c2, a1)) {
-          close.push(a2);
-        }
-      });
-      return _.sortBy(close, function(a) {
-        return costs[a];
+
+    _.each(aspects, function(aspect1, k) {
+      _.each(aspect1.from, function(aspect2) {
+        aspect2.to.push(aspect1);
       });
     });
 
+    var calcCost = function() {
+      var prev = {};
+      var current = {};
+      var froms = _.chain(aspects).mapValues('from').transform(function(obj, from, k) {
+        if (from.length === 0) {
+          aspects[k].cost = prev[k] = 1;
+        } else {
+          obj[k] = from;
+        }
+      }).value();
+
+      while (_.size(froms) > 0) {
+        froms = _.transform(froms, function(obj, from, k) {
+          from = _.filter(from, function(aspect) {
+            if (prev[aspect.name]) {
+              aspects[k].cost += prev[aspect.name];
+            } else {
+              return true;
+            }
+          });
+          if (from.length === 0) {
+            current[k] = aspects[k].cost;
+          } else {
+            obj[k] = from;
+          }
+        });
+        prev = current;
+        current = {};
+      }
+    };
+    calcCost();
+
+    _.each(aspects, function(aspect) {
+      aspect.from = _.sortBy(aspect.from, 'cost');
+      aspect.to = _.sortBy(aspect.to, 'cost');
+    });
+
     return {
-      names: keys,
-      combinations: combinations,
-      costs: costs,
-      closes: closes
+      keys: keys,
+      aspects: aspects
     };
   })
 
   .factory('search', function($q, Aspect) {
     return function(from, to, step) {
       var dfd = $q.defer();
-      var stack = [{
-        path: [from],
-        cost: Aspect.costs[from]
-      }];
+      var stack = [[from]];
+      var laterStack = [];
       var paths = [];
-      var betterCost = Infinity;
+
+      var updatePaths = function(path) {
+        path = {path: path, cost: _.sumBy(path, 'cost')};
+        paths.splice(_.sortedIndexBy(paths, path, 'cost'), 0, path);
+      };
 
       async.whilst(function() {
+        if (stack.length === 0 && paths.length === 0) {
+          stack = laterStack;
+        }
         return stack.length > 0;
       }, function(done) {
-        var path = stack.pop();
-        var last = _.last(path.path);
-        if (path.path.length >= step) {
+        var path = stack.shift();
+        var last = _.last(path);
+        if (path.length >= step) {
           if (last === to) {
-            paths.splice(_.sortedIndexBy(paths, path, 'cost'), 0, path);
+            updatePaths(path);
             dfd.notify(paths);
-            betterCost = Math.max(betterCost, path.cost);
           }
           return done();
         }
-        if (path.cost + step - path.path.length > betterCost) {
-          console.info('cut by cost', path);
-          return done();
-        }
-        _.each(Aspect.closes[last].reverse(), function(a) {
-          stack.push({
-            path: _.concat(path.path, [a]),
-            cost: path.cost + Aspect.costs[a]
-          });
+        var minCost = last.to[0].cost;
+        _.each(last.to, function(a) {
+          if (a.cost <= minCost + 1) {
+            stack.push(_.concat(path, [a]));
+          } else {
+            laterStack.push(_.concat(path, [a]));
+          }
         });
         done();
       }, function() {
@@ -133,32 +144,27 @@ angular.module('myApp', [])
     };
   })
 
-  .directive("aspect", function(Aspect) {
+  .directive("aspect", function() {
     return {
       restrict: 'E',
       scope: {
-        number: '='
+        src: '='
       },
-      template: '<img class="aspect" ng-src="aspects/{{ names[number] }}.png" title="{{ names[number] }}">',
-      link: function(scope) {
-        scope.names = Aspect.names;
-      }
+      template: '<img class="aspect" ng-src="aspects/{{ src.name }}.png" title="{{ src.name }}">'
     }
   })
 
   .controller('MainCtrl', function($scope, Aspect, search) {
-    $scope.names = Aspect.names;
-    $scope.combinations = Aspect.combinations;
-    $scope.from = $scope.to = Aspect.names[0];
+    $scope.keys = Aspect.keys;
+    $scope.aspects = Aspect.aspects;
+    $scope.from = $scope.to = Aspect.aspects[Aspect.keys[0]];
     $scope.step = 3;
     $scope.searching = false;
 
     $scope.search = function() {
-      var from = _.indexOf(Aspect.names, $scope.from);
-      var to = _.indexOf(Aspect.names, $scope.to);
       $scope.searching = true;
       $scope.paths = [];
-      search(from, to, $scope.step).then(function(paths) {
+      search($scope.from, $scope.to, $scope.step).then(function(paths) {
         $scope.searching = false;
         $scope.paths = paths;
       }, null, function(paths) {
